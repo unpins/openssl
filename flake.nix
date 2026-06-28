@@ -9,27 +9,14 @@
   inputs.unpins-lib.url = "github:unpins/nix-lib";
 
   # The `openssl` command-line tool (3.x), statically linked against its own
-  # libcrypto/libssl. We ship ONLY the `openssl` binary — nixpkgs' bin output
-  # also installs `c_rehash`, a Perl script with a /nix/store bash-perl shebang
-  # that can't run on a user's machine, so it's dropped.
-  #
-  # OPENSSLDIR retarget (the main packaging delta): nixpkgs compiles the
-  # binary with OPENSSLDIR/ENGINESDIR/MODULESDIR pointing at /nix/store output
-  # paths (the split `etc` output + `$out/lib`). A self-contained binary must
-  # not embed store paths it carries as a runtime closure, so we override those
-  # three macros to the conventional system locations (/etc/ssl, …) at BUILD
-  # time only — via `buildFlags`, which the build phase honours but the install
-  # phase does not, so nixpkgs' `etc`-output install still works. The upshot is
-  # both cleaner (0 store refs) and more correct: the CLI now consults the
-  # host's /etc/ssl/openssl.cnf and system trust store, exactly like a distro
-  # `openssl`. Users can still override with OPENSSL_CONF / SSL_CERT_FILE /
-  # SSL_CERT_DIR.
-  #
-  # Certificate Transparency re-enabled: nixpkgs forces `no-ct` on every static
-  # build only because CT bakes a CTLOG_FILE store path into the binary. The
-  # OPENSSLDIR retarget above already moves that to /etc/ssl/ct_log_list.cnf, so
-  # the reason is gone and we keep CT (the `s_client -ct` SCT path) — see the
-  # `retarget` helper.
+  # libcrypto/libssl, shipped as a single binary. The packaging delta that makes
+  # it self-contained — retarget OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store
+  # to /etc/ssl (0 store refs; the CLI consults the host's openssl.cnf + trust
+  # store like a distro openssl, still overridable via OPENSSL_CONF /
+  # SSL_CERT_FILE / SSL_CERT_DIR), re-enable Certificate Transparency, and drop
+  # the legacy `c_rehash` shim — is single-sourced in lib.retargetOpenssl and
+  # applied by the engine scope's native-overlay, NOT here (see the `let` below
+  # and that file for the full rationale).
   #
   # Windows: a single `openssl.exe` cross-built with mingw (openssl is portable
   # C and builds cleanly for mingw-w64). The static cross produces a PE32+ that
@@ -44,26 +31,15 @@
   outputs = { self, unpins-lib }:
     let
       lib = unpins-lib.lib;
-      # Shared packaging deltas, parameterised by the OPENSSLDIR family so the
-      # native (/etc/ssl) and Windows (C:/ssl) builds differ in one place only.
-      retarget = sslDir: enginesDir: modulesDir: old: {
-        # nixpkgs adds `no-ct` for every static build — Certificate Transparency
-        # bakes a default CTLOG_FILE path into libcrypto, and on a stock static
-        # build that path lands in /nix/store (undesired in a self-contained
-        # binary). We already retarget OPENSSLDIR off /nix/store, so CTLOG_FILE
-        # follows to ${sslDir}/ct_log_list.cnf — a system path, not a store ref.
-        # That removes nixpkgs' sole reason for the flag, so we drop it and ship
-        # CT (the `s_client -ct` SCT validation) like a distribution openssl.
-        configureFlags = builtins.filter (f: f != "no-ct") (old.configureFlags or [ ]);
-        buildFlags = (old.buildFlags or [ ]) ++ [
-          "OPENSSLDIR=${sslDir}"
-          "ENGINESDIR=${enginesDir}"
-          "MODULESDIR=${modulesDir}"
-        ];
-        postInstall = (old.postInstall or "") + ''
-          rm -f "''${bin:-$out}/bin/c_rehash"
-        '';
-      };
+      # The packaging delta (retarget OPENSSLDIR/ENGINESDIR/MODULESDIR off
+      # /nix/store, re-enable CT, drop c_rehash) is single-sourced in
+      # lib.retargetOpenssl and applied ONCE per platform by the engine scope's
+      # native-overlay/openssl.nix. So the native build below just RECEIVES the
+      # already-retargeted openssl, built via the unpin-llvm engine — the very same
+      # derivation engine consumers like dnsutils link, so there is one openssl drv
+      # and this package adds no recipe of its own. Windows is still mingw cross
+      # (not yet on unpin-llvm), and that scope has no such overlay, so until mingw
+      # migrates to the engine windowsBuild applies the shared recipe directly.
     in
     lib.mkStandaloneFlake {
       inherit self;
@@ -71,11 +47,13 @@
       binName = "openssl";
       smoke = [ "version" ];
       smokePattern = "OpenSSL 3";
-      build = pkgs:
-        pkgs.pkgsStatic.openssl.overrideAttrs
-          (retarget "/etc/ssl" "/etc/ssl/engines-3" "/etc/ssl/ossl-modules");
+      # Engine (no multicall — single binary): useEngine kicks in on linux/darwin,
+      # so `build` receives enginePkgs where pkgsStatic.openssl is the overlay's
+      # retargeted drv. Windows keeps useEngine=false → plain mingw pkgs.
+      engine = "unpin-llvm";
+      build = pkgs: pkgs.pkgsStatic.openssl;
       windowsBuild = pkgs:
         (lib.mingwStaticCross pkgs).openssl.overrideAttrs
-          (retarget "C:/ssl" "C:/ssl/engines-3" "C:/ssl/ossl-modules");
+          (lib.retargetOpenssl "C:/ssl" "C:/ssl/engines-3" "C:/ssl/ossl-modules");
     };
 }
