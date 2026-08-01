@@ -54,6 +54,6 @@
       build = pkgs: pkgs.pkgsStatic.openssl;
       windowsBuild = pkgs:
         (lib.mingwStaticCross pkgs).openssl.overrideAttrs
-          (lib.retargetOpenssl "C:/ssl" "C:/ssl/engines-3" "C:/ssl/ossl-modules");
+          (lib.retargetOpenssl "C:/ssl");
     };
 }
