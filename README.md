@@ -74,12 +74,17 @@ The [Releases](https://github.com/unpins/openssl/releases) page has standalone b
   the common Linux distributions (Debian/Ubuntu, Fedora/RHEL, openSUSE, Alpine,
   Arch, NixOS, Android/Termux) and `/etc/ssl/cert.pem` on macOS. A host with none
   of them — a minimal container, for example — falls back to Mozilla's root
-  certificates embedded in the binary. On Windows the embedded roots are
-  combined with the system's trusted root store. A bundle that exists but cannot
-  be read is an error, not a reason to fall back. `SSL_CERT_FILE` and
-  `SSL_CERT_DIR` work as usual; set `UNPIN_CA_FALLBACK=off` to never use the
-  embedded roots, or `UNPIN_CA_FALLBACK=force` to use only them. Certificates
-  added only to the macOS Keychain are not seen.
+  certificates embedded in the binary. A bundle that exists but cannot be read
+  is an error, not a reason to fall back. Certificates added only to the macOS
+  Keychain are not seen.
+- **CA certificates on Windows.** The embedded roots are combined with the
+  system's trusted root store; certificates Windows lists as untrusted are left
+  out. Certificates are never read from `C:\ssl`, since any user can create
+  that folder.
+- **Choosing the trust source.** `SSL_CERT_FILE` and `SSL_CERT_DIR` work as
+  usual and take precedence. Otherwise, `UNPIN_CA_FALLBACK=force` uses only the
+  embedded roots, and `UNPIN_CA_FALLBACK=off` never uses them (on Windows it
+  leaves just the system root store).
 - **No upstream features are disabled.** Certificate Transparency
   (`s_client -ct`) stays on — nixpkgs turns it off on static builds only because
   it bakes a `/nix/store` CTLOG_FILE path in, but the OPENSSLDIR retarget above

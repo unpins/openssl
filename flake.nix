@@ -27,9 +27,10 @@
   # OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store. We use `C:\ssl` (openssl's
   # historical Windows default, and space-free — a path with spaces would be
   # word-split by make's command-line buildFlags), so a user can drop an
-  # openssl.cnf under C:\ssl. CA certificates are never read from C:\ssl (any
-  # user can create it): the default trust is the embedded Mozilla roots plus the
-  # system ROOT store.
+  # openssl.cnf under C:\ssl. CA certificates are never read from C:\ssl -
+  # neither cert.pem nor certs\ (any user can create it): the default trust is
+  # the embedded Mozilla roots plus the system ROOT store, minus what Windows
+  # distrusts.
   outputs = { self, unpins-lib }:
     let
       lib = unpins-lib.lib;
