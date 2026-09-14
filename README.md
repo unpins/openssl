@@ -67,12 +67,19 @@ The [Releases](https://github.com/unpins/openssl/releases) page has standalone b
   OPENSSLDIR/ENGINESDIR/MODULESDIR pointing at `/nix/store` paths. A
   self-contained binary must not carry a store closure, so those macros are
   retargeted to the conventional system locations at build time — `/etc/ssl` on
-  Linux/macOS, `C:\ssl` on Windows. The result is both cleaner (zero store
-  references) and more correct: the CLI consults the host's `openssl.cnf` and
-  system trust store, exactly like a distribution `openssl`. On Windows you can
-  also verify against the OS certificate store with
-  `-CAstore org.openssl.winstore://`. Override with `OPENSSL_CONF` /
-  `SSL_CERT_FILE` / `SSL_CERT_DIR` as usual.
+  Linux/macOS, `C:\ssl` on Windows — where `openssl` reads an `openssl.cnf` if
+  the host has one. Override with `OPENSSL_CONF` as usual.
+- **CA certificates.** When no `-CAfile`/`-CApath` is given, `openssl` uses the
+  host's CA certificates if the host has them: the bundle or hashed directory of
+  the common Linux distributions (Debian/Ubuntu, Fedora/RHEL, openSUSE, Alpine,
+  Arch, NixOS, Android/Termux) and `/etc/ssl/cert.pem` on macOS. A host with none
+  of them — a minimal container, for example — falls back to Mozilla's root
+  certificates embedded in the binary. On Windows the embedded roots are
+  combined with the system's trusted root store. A bundle that exists but cannot
+  be read is an error, not a reason to fall back. `SSL_CERT_FILE` and
+  `SSL_CERT_DIR` work as usual; set `UNPIN_CA_FALLBACK=off` to never use the
+  embedded roots, or `UNPIN_CA_FALLBACK=force` to use only them. Certificates
+  added only to the macOS Keychain are not seen.
 - **No upstream features are disabled.** Certificate Transparency
   (`s_client -ct`) stays on — nixpkgs turns it off on static builds only because
   it bakes a `/nix/store` CTLOG_FILE path in, but the OPENSSLDIR retarget above

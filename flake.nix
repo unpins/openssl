@@ -11,10 +11,11 @@
   # The `openssl` command-line tool (3.x), statically linked against its own
   # libcrypto/libssl, shipped as a single binary. The packaging delta that makes
   # it self-contained — retarget OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store
-  # to /etc/ssl (0 store refs; the CLI consults the host's openssl.cnf + trust
-  # store like a distro openssl, still overridable via OPENSSL_CONF /
-  # SSL_CERT_FILE / SSL_CERT_DIR), re-enable Certificate Transparency, and drop
-  # the legacy `c_rehash` shim — is single-sourced in lib.retargetOpenssl and
+  # to /etc/ssl (0 store refs; the CLI reads the host's openssl.cnf), use the
+  # host's CA certificates with Mozilla's roots embedded as the fallback for a
+  # host that has none (still overridable via OPENSSL_CONF / SSL_CERT_FILE /
+  # SSL_CERT_DIR / UNPIN_CA_FALLBACK), re-enable Certificate Transparency, and
+  # drop the legacy `c_rehash` shim — is single-sourced in lib.retargetOpenssl and
   # applied by the engine scope's native-overlay, NOT here (see the `let` below
   # and that file for the full rationale).
   #
@@ -26,8 +27,9 @@
   # OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store. We use `C:\ssl` (openssl's
   # historical Windows default, and space-free — a path with spaces would be
   # word-split by make's command-line buildFlags), so a user can drop an
-  # openssl.cnf under C:\ssl; certificate verification can also use the OS trust
-  # store via `-CAstore org.openssl.winstore://`.
+  # openssl.cnf under C:\ssl. CA certificates are never read from C:\ssl (any
+  # user can create it): the default trust is the embedded Mozilla roots plus the
+  # system ROOT store.
   outputs = { self, unpins-lib }:
     let
       lib = unpins-lib.lib;
