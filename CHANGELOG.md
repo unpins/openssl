@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Updated to OpenSSL 3.6.3.
+
 ### Fixed
 
 - Certificate verification with no `-CAfile`/`-CApath` (`s_client`, `verify`)
