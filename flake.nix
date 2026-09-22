@@ -19,15 +19,15 @@
   # applied by the engine scope's native-overlay, NOT here (see the `let` below
   # and that file for the full rationale).
   #
-  # Windows: a single `openssl.exe` cross-built with mingw (openssl is portable
-  # C and builds cleanly for mingw-w64). The static cross produces a PE32+ that
-  # imports only Windows system DLLs (KERNEL32/msvcrt/WS2_32/ADVAPI32/CRYPT32/
-  # USER32) — no companion DLLs — so the portability gate passes. We keep the
-  # same deltas as the native build: drop `c_rehash`, re-enable CT, and retarget
-  # OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store. We use `C:\ssl` (openssl's
-  # historical Windows default, and space-free — a path with spaces would be
-  # word-split by make's command-line buildFlags), so a user can drop an
-  # openssl.cnf under C:\ssl. CA certificates are never read from C:\ssl -
+  # Windows: a single `openssl.exe` cross-built for mingw-w64 by the engine
+  # (openssl is portable C). The static cross produces a PE32+ that imports only
+  # Windows system DLLs (KERNEL32, the UCRT api sets, WS2_32/ADVAPI32/
+  # CRYPT32/USER32) — no companion DLLs — so the portability gate passes. We
+  # keep the same deltas as the native build: drop `c_rehash`, re-enable CT, and
+  # retarget OPENSSLDIR/ENGINESDIR/MODULESDIR off /nix/store. We use `C:\ssl`
+  # (openssl's historical Windows default, and space-free — a path with spaces
+  # would be word-split by make's command-line buildFlags), so a user can drop
+  # an openssl.cnf under C:\ssl. CA certificates are never read from C:\ssl -
   # neither cert.pem nor certs\ (any user can create it): the default trust is
   # the embedded Mozilla roots plus the system ROOT store, minus what Windows
   # distrusts.
@@ -40,9 +40,8 @@
       # native-overlay/openssl.nix. So the native build below just RECEIVES the
       # already-retargeted openssl, built via the unpin-llvm engine — the very same
       # derivation engine consumers like dnsutils link, so there is one openssl drv
-      # and this package adds no recipe of its own. Windows is still mingw cross
-      # (not yet on unpin-llvm), and that scope has no such overlay, so until mingw
-      # migrates to the engine windowsBuild applies the shared recipe directly.
+      # and this package adds no recipe of its own. The engine's mingw scope has
+      # no such overlay, so windowsBuild applies the shared recipe directly.
     in
     lib.mkStandaloneFlake {
       inherit self;
@@ -50,10 +49,14 @@
       binName = "openssl";
       smoke = [ "version" ];
       smokePattern = "OpenSSL 3";
-      # Engine (no multicall — single binary): useEngine kicks in on linux/darwin,
-      # so `build` receives enginePkgs where pkgsStatic.openssl is the overlay's
-      # retargeted drv. Windows keeps useEngine=false → plain mingw pkgs.
+      # `build` receives enginePkgs, where pkgsStatic.openssl is the overlay's
+      # retargeted drv.
       engine = "unpin-llvm";
+      multicall = {
+        # The `.exe` on the engine too, not the nixpkgs mingw-gcc cross.
+        windows = true;
+        programs = [{ name = "openssl"; }];
+      };
       build = pkgs: pkgs.pkgsStatic.openssl;
       windowsBuild = pkgs:
         (lib.mingwStaticCross pkgs).openssl.overrideAttrs
