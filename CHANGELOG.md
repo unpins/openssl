@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [3.6.4-1] - 2026-09-26
+
 ### Changed
 
 - Updated to OpenSSL 3.6.3.
